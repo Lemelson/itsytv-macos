@@ -120,13 +120,59 @@ final class AppController: NSObject, NSMenuDelegate {
         if !wantsMenu,
            panel?.isVisible != true,
            case .disconnected = manager.connectionStatus,
-           let lastID = manager.lastConnectedDeviceID,
-           KeychainStorage.load(for: lastID) != nil,
-           manager.discoveredDevices.contains(where: { $0.id == lastID }) {
+           let lastID = lastPairedDeviceNearby {
             openRemote(for: lastID)
         } else {
             showMenu()
         }
+    }
+
+    /// The last connected Apple TV, if it's paired and on the network right now.
+    private var lastPairedDeviceNearby: String? {
+        guard let lastID = manager.lastConnectedDeviceID,
+              KeychainStorage.load(for: lastID) != nil,
+              manager.discoveredDevices.contains(where: { $0.id == lastID }) else { return nil }
+        return lastID
+    }
+
+    // MARK: - When the menu bar icon can't be seen
+
+    /// Whether macOS hides the menu bar icon – behind the notch, or turned off in System Settings →
+    /// Menu Bar (see `MenuBarIconVisibility`).
+    var isIconHidden: Bool {
+        let window = statusItem.button?.window
+        let screen = window?.screen
+        return MenuBarIconVisibility.isHidden(
+            windowVisible: window?.occlusionState.contains(.visible) ?? false,
+            iconFrame: window?.frame,
+            screenFrame: screen?.frame,
+            notchGap: MenuBarIconVisibility.notchGap(left: screen?.auxiliaryTopLeftArea,
+                                                     right: screen?.auxiliaryTopRightArea))
+    }
+
+    /// Opening Itsytv again while it runs – from Spotlight, Finder or the Dock – always shows
+    /// something, so a hidden icon doesn't leave the app unreachable.
+    func handleReopen() {
+        switch ReopenAction.decide(remoteIsOpen: panel?.isVisible == true,
+                                   lastPairedDeviceNearby: lastPairedDeviceNearby) {
+        case .focusRemote:
+            NSApp.activate(ignoringOtherApps: true)
+            panel?.makeKeyAndOrderFront(nil)
+        case .openRemote(let deviceID):
+            openRemote(for: deviceID)
+        case .showDevices:
+            showDevices()
+        }
+    }
+
+    /// The device menu – where pairing starts – under the icon, or at the top centre of the screen
+    /// when the icon is hidden.
+    func showDevices() {
+        guard isIconHidden, let screen = NSScreen.main else { return showMenu() }
+        NSApp.activate(ignoringOtherApps: true)
+        let topLeft = MenuBarIconVisibility.fallbackTopLeft(visibleFrame: screen.visibleFrame,
+                                                            width: DS.ControlSize.menuItemWidth)
+        menu.popUp(positioning: nil, at: topLeft, in: nil)
     }
 
     /// Pop the status menu by temporarily attaching it, then detach on close
@@ -254,6 +300,9 @@ final class AppController: NSObject, NSMenuDelegate {
                 }
             }
             menu.addItem(loginItem)
+            menu.addItem(createCheckboxItem(title: "Show in Dock", isOn: DockIcon.isOn) {
+                DockIcon.set(!DockIcon.isOn)
+            })
             #if !APPSTORE
             let updateItem = createActionItem(title: "Check for updates...", symbolName: "arrow.triangle.2.circlepath") {
                 UpdateChecker.check()
@@ -495,11 +544,16 @@ final class AppController: NSObject, NSMenuDelegate {
         if let origin = savedPanelOrigin(panelHeight: panel.frame.height), isPointOnScreen(origin, panelSize: panel.frame.size) {
             log.info("showPanel: using saved origin (\(origin.x), \(origin.y))")
             panel.setFrameOrigin(origin)
-        } else if let buttonFrame = statusItem.button?.window?.frame {
+        } else if !isIconHidden, let buttonFrame = statusItem.button?.window?.frame {
             let x = buttonFrame.midX - 88
             let y = buttonFrame.minY - panel.frame.height
             log.info("showPanel: using status bar fallback (\(x), \(y))")
             panel.setFrameOrigin(NSPoint(x: x, y: y))
+        } else if let screen = NSScreen.main {
+            // The icon is hidden (notch, or turned off in System Settings → Menu Bar).
+            let topLeft = MenuBarIconVisibility.fallbackTopLeft(visibleFrame: screen.visibleFrame, width: panel.frame.width)
+            log.info("showPanel: icon hidden, using top centre (\(topLeft.x), \(topLeft.y))")
+            panel.setFrameOrigin(NSPoint(x: topLeft.x, y: topLeft.y - panel.frame.height))
         } else {
             log.warning("showPanel: no saved origin and no status bar button frame")
         }

@@ -1,5 +1,9 @@
 import SwiftUI
+import ServiceManagement
 import ItsytvCore
+#if APPSTORE
+import StoreKit
+#endif
 
 enum RemoteTab: String, CaseIterable {
     case remote = "Remote"
@@ -14,6 +18,9 @@ struct RemoteControlView: View {
     @State private var appSearchText = ""
     @State private var showUnpairHint = false
     @AppStorage("showAppsSearch") private var showAppsSearch = false
+    #if APPSTORE
+    @Environment(\.requestReview) private var requestReview
+    #endif
 
     private var isConnected: Bool {
         manager.connectionStatus == .connected
@@ -172,7 +179,26 @@ struct RemoteControlView: View {
             // a stuck connection reliably surfaces the unpair option.
             if !isConnected { scheduleUnpairHint() }
         }
+        #if APPSTORE
+        .task(id: isConnected) { await askForReviewAfterUse() }
+        #endif
     }
+
+    #if APPSTORE
+    /// Records a day of use and, after `ReviewPromptRule.sustainedUse` seconds of a connected remote,
+    /// asks for a rating when the rule allows. The task restarts – and so is cancelled – when the
+    /// connection changes or the panel closes.
+    private func askForReviewAfterUse() async {
+        guard isConnected else { return }
+        let rule = ReviewPromptRule(defaults: .standard)
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
+        rule.recordUse(on: Date(), version: version)
+        try? await Task.sleep(for: .seconds(ReviewPromptRule.sustainedUse))
+        guard !Task.isCancelled, isConnected, rule.shouldPrompt(now: Date()) else { return }
+        rule.recordPrompt(now: Date())
+        requestReview()
+    }
+    #endif
 
     /// Reset and (re)arm the 5-second "Taking too long?" unpair hint.
     private func scheduleUnpairHint() {
@@ -1089,22 +1115,33 @@ struct ErrorView: View {
 
 struct SettingsView: View {
     @Environment(AppleTVManager.self) private var manager
+    @AppStorage(DockIcon.key) private var showInDock = false
+    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @State private var pairedIDs = KeychainStorage.allPairedDeviceIDs()
 
     var body: some View {
         Form {
             Section("Paired devices") {
-                let deviceIDs = KeychainStorage.allPairedDeviceIDs()
-                if deviceIDs.isEmpty {
+                if pairedIDs.isEmpty {
                     Text("No paired devices")
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(deviceIDs, id: \.self) { id in
+                    ForEach(pairedIDs, id: \.self) { id in
                         HStack {
                             Image(systemName: "appletv.fill")
-                            Text(id)
+                            if let name = manager.discoveredDevices.first(where: { $0.id == id })?.name {
+                                Text(name)
+                            } else {
+                                Text("Apple TV")
+                                Text("not on the network")
+                                    .foregroundStyle(.secondary)
+                            }
                             Spacer()
-                            Button("Remove") {
+                            // As the remote's own Unpair: forget the pairing, drop the connection.
+                            Button("Unpair") {
                                 KeychainStorage.delete(for: id)
+                                if manager.connectedDeviceID == id { manager.disconnect() }
+                                pairedIDs = KeychainStorage.allPairedDeviceIDs()
                             }
                             .foregroundStyle(.red)
                         }
@@ -1112,7 +1149,17 @@ struct SettingsView: View {
                 }
             }
             Section("General") {
-                Toggle("Launch at login", isOn: .constant(false))
+                Toggle("Launch at login", isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) { _, on in
+                        do {
+                            if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+                        } catch {
+                            launchAtLogin = SMAppService.mainApp.status == .enabled
+                        }
+                    }
+                // Reachable from the app menu once Itsytv is in the Dock.
+                Toggle("Show in Dock", isOn: $showInDock)
+                    .onChange(of: showInDock) { _, _ in DockIcon.apply() }
             }
         }
         .formStyle(.grouped)

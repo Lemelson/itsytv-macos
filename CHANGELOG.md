@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.7.0
+
+- Add a welcome on first launch – Itsytv lives in the menu bar with no Dock icon or window, so when a full menu bar pushed its icon behind the notch, or the icon was turned off in System Settings → Menu Bar, a new user saw nothing at all. The welcome shows where to find it; while the icon is hidden it offers a lasting way in – Menu Bar settings, or keeping Itsytv in the Dock – and comes back on later launches until one of them works
+- Add Show in Dock, in the menu bar menu and in Settings – a Dock icon that opens the remote
+- Opening Itsytv again from Spotlight, Finder or the Dock while it's running now shows the remote, or the device list if no Apple TV is paired yet – under the menu bar icon, or at the top centre of the screen when the icon is hidden
+- The iPhone app suggestion (direct download) now waits until an Apple TV is paired, and never shows together with the welcome
+- Fix the Settings window: Launch at login works, and paired Apple TVs show by name and go away when removed
+- Ask for an App Store rating once the remote has been used on a few different days (App Store version only)
+
 ## 1.6.2
 
 - Fix pairing hanging for ~30 seconds after entering the PIN on tvOS 27; the PIN entry now shows a spinner while the Apple TV confirms and keeps its state when the menu is reopened
