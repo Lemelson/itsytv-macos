@@ -280,12 +280,6 @@ final class AppController: NSObject, NSMenuDelegate {
             break
         default:
             menu.addItem(NSMenuItem.separator())
-            #if !APPSTORE
-            if shouldShowItsyhomePromo {
-                menu.addItem(createItsyhomePromoItem())
-                menu.addItem(NSMenuItem.separator())
-            }
-            #endif
             let loginItem = createCheckboxItem(
                 title: "Launch at login",
                 isOn: SMAppService.mainApp.status == .enabled
