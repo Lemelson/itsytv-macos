@@ -50,6 +50,7 @@ enum ShortcutsWindow {
 struct ShortcutsSheetView: View {
     @State private var active: RemoteShortcut?
     @State private var flashID = 0
+    private var settings: ShortcutSettings { .shared }
 
     var body: some View {
         HStack(alignment: .top, spacing: 24) {
@@ -59,7 +60,7 @@ struct ShortcutsSheetView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Try it")
                         .font(.headline)
-                    Text("Press a shortcut or click a button.\nNothing is sent to your Apple TV.")
+                    Text("Press a shortcut or click a button – nothing is sent to your Apple TV. Click the keys in a row to change them.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -73,8 +74,7 @@ struct ShortcutsSheetView: View {
                             .padding(.leading, 8)
                             .padding(.bottom, 2)
                         ForEach(group.items) { shortcut in
-                            ShortcutRow(shortcut: shortcut, isActive: active == shortcut)
-                                .onTapGesture { flash(shortcut) }
+                            ShortcutRow(shortcut: shortcut, isActive: active == shortcut, onTap: { flash(shortcut) })
                         }
                     }
                 }
@@ -83,11 +83,27 @@ struct ShortcutsSheetView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+
+                // Always laid out (just disabled) so the window never has to resize.
+                Button("Restore default shortcuts") {
+                    settings.recording = nil
+                    settings.resetAll()
+                }
+                .controlSize(.small)
+                .disabled(!settings.hasCustomizations)
             }
-            .frame(width: 250)
+            .frame(width: 290)
         }
         .padding(20)
-        .background(ShortcutKeyCatcher(onShortcut: flash))
+        .background(ShortcutKeyCatcher(onShortcut: flash, onRecord: record))
+        .onDisappear { settings.recording = nil }
+    }
+
+    private func record(_ keys: ShortcutKeys) {
+        guard let shortcut = settings.recording else { return }
+        settings.recording = nil
+        settings.set(keys, for: shortcut)
+        flash(shortcut)
     }
 
     private func flash(_ shortcut: RemoteShortcut) {
@@ -104,17 +120,52 @@ struct ShortcutsSheetView: View {
 private struct ShortcutRow: View {
     let shortcut: RemoteShortcut
     let isActive: Bool
+    let onTap: () -> Void
+    private var settings: ShortcutSettings { .shared }
+
+    private var isRecording: Bool { settings.recording == shortcut }
 
     var body: some View {
         HStack(spacing: 10) {
             Text(shortcut.title)
                 .font(.system(size: 13))
             Spacer(minLength: 8)
-            HStack(spacing: 3) {
-                ForEach(Array(shortcut.keyCaps.enumerated()), id: \.offset) { _, cap in
-                    KeyCap(text: cap, isActive: isActive)
+            Group {
+                if isRecording {
+                    Text("Type new keys…")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Color.accentColor)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 4)
+                                .strokeBorder(Color.accentColor, lineWidth: 1)
+                        )
+                } else {
+                    HStack(spacing: 3) {
+                        ForEach(Array(shortcut.keyCaps.enumerated()), id: \.offset) { _, cap in
+                            KeyCap(text: cap, isActive: isActive)
+                        }
+                    }
                 }
             }
+            .contentShape(Rectangle())
+            .onTapGesture { settings.recording = isRecording ? nil : shortcut }
+            .help(isRecording ? "Click to cancel" : "Click to change")
+
+            // Fixed slot keeps the key caps aligned whether or not a row is customized.
+            Button {
+                settings.reset(shortcut)
+            } label: {
+                Image(systemName: "arrow.uturn.backward")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Restore default (\(ShortcutKeys.caps(shortcut.defaultKeys).joined()))")
+            .opacity(settings.isCustomized(shortcut) ? 1 : 0)
+            .disabled(!settings.isCustomized(shortcut))
+            .frame(width: 14)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
@@ -123,6 +174,7 @@ private struct ShortcutRow: View {
                 .fill(Color.accentColor.opacity(isActive ? 0.22 : 0))
         )
         .contentShape(Rectangle())
+        .onTapGesture(perform: onTap)
     }
 }
 
@@ -283,20 +335,24 @@ private struct ShortcutsRemotePreview: View {
 /// beeping. Only events addressed to this window are touched.
 private struct ShortcutKeyCatcher: NSViewRepresentable {
     let onShortcut: (RemoteShortcut) -> Void
+    let onRecord: (ShortcutKeys) -> Void
 
     func makeNSView(context: Context) -> KeyCatcherView {
         let view = KeyCatcherView()
         view.onShortcut = onShortcut
+        view.onRecord = onRecord
         return view
     }
 
     func updateNSView(_ nsView: KeyCatcherView, context: Context) {
         nsView.onShortcut = onShortcut
+        nsView.onRecord = onRecord
     }
 }
 
 private final class KeyCatcherView: NSView {
     var onShortcut: ((RemoteShortcut) -> Void)?
+    var onRecord: ((ShortcutKeys) -> Void)?
     private var monitor: Any?
 
     override func viewDidMoveToWindow() {
@@ -305,8 +361,13 @@ private final class KeyCatcherView: NSView {
         monitor = nil
         guard window != nil else { return }
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self, event.window === self.window,
-                  let shortcut = RemoteShortcut.match(event) else { return event }
+            guard let self, event.window === self.window else { return event }
+            // While a row is recording, any key (with or without modifiers) becomes its new shortcut.
+            if ShortcutSettings.shared.recording != nil {
+                if !event.isARepeat { self.onRecord?(ShortcutKeys(event: event)) }
+                return nil
+            }
+            guard let shortcut = RemoteShortcut.match(event) else { return event }
             self.onShortcut?(shortcut)
             return nil
         }
