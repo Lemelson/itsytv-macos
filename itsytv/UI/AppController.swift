@@ -798,6 +798,7 @@ struct PanelMenuButton: View {
     @AppStorage("alwaysOnTop") private var alwaysOnTop = true
     @AppStorage("showAppsSearch") private var showAppsSearch = false
     @AppStorage("showShortcutHints") private var showShortcutHints = false
+    @AppStorage("showArtwork") private var showArtwork = true
     @State private var showingHotkeyRecorder = false
     @State private var currentHotkey: ShortcutKeys?
 
@@ -806,6 +807,7 @@ struct PanelMenuButton: View {
             Toggle("Always on top", isOn: $alwaysOnTop)
             Toggle("Show app search", isOn: $showAppsSearch)
                 .keyboardShortcut("f", modifiers: .command)
+            Toggle("Show artwork", isOn: $showArtwork)
             Divider()
             Toggle("Show shortcut hints", isOn: $showShortcutHints)
             Button("Keyboard shortcuts…") {

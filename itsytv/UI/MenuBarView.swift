@@ -214,6 +214,7 @@ struct RemoteControlView: View {
 
 struct NowPlayingBar: View {
     @Environment(AppleTVManager.self) private var manager
+    @AppStorage("showArtwork") private var showArtwork = true
 
     var body: some View {
         let mrp = manager.mrpManager
@@ -221,8 +222,10 @@ struct NowPlayingBar: View {
         let hasContent = np != nil
 
         VStack(spacing: 6) {
-            // Artwork — full width, square
-            if let data = np?.artworkData, let image = NSImage(data: data) {
+            // Artwork — full width, square (can be turned off in the … menu)
+            if !showArtwork {
+                EmptyView()
+            } else if let data = np?.artworkData, let image = NSImage(data: data) {
                 Color.clear
                     .frame(maxWidth: .infinity)
                     .frame(height: 160)
