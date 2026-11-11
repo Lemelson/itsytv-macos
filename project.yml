@@ -23,7 +23,7 @@ settings:
 
 packages:
   ItsytvCore:
-    path: ../itsytv-core
+    path: ItsytvCore
 
 schemes:
   itsytv:

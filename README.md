@@ -2,14 +2,14 @@
 
 > This is a fork of [nickustinov/itsytv-macos](https://github.com/nickustinov/itsytv-macos), kept in sync with upstream and extended. All credit for Itsytv goes to Nick Ustinov. Changes that make sense for everyone are sent upstream as pull requests.
 >
-> The fork's work lives on the **`custom`** branch. It builds against the matching fork of the core package, [Lemelson/itsytv-core](https://github.com/Lemelson/itsytv-core) (branch `custom`).
+> The fork's work lives on the **`custom`** branch. Everything is in this one repo: the core package (upstream [itsytv-core](https://github.com/nickustinov/itsytv-core) plus this fork's changes) is included in [`ItsytvCore/`](ItsytvCore).
 
 ## What this fork adds
 
 - **Shortcut hints on the remote** – "Show shortcut hints" in the panel's ⋯ menu labels every button with its key.
 - **Keyboard Shortcuts window** – ⋯ → "Keyboard shortcuts…": a copy of the remote with every key labelled plus the full list. Press a shortcut or click a button and it lights up; nothing is sent to the Apple TV, so it's a safe place to learn the keys.
 - **Custom shortcuts** – click the keys of any row in that window and type new ones. Conflicts swap automatically; each row and the whole list can be restored to defaults.
-- **Real press-and-hold from the keyboard** – esc, ⌫, ↩ and space send button-down on key down and button-up on key up, exactly like the Siri Remote: hold esc → Home screen, hold ⌫ → Control Center, hold ↩ → context menu. macOS key repeat no longer fires a burst of clicks, and the held button is drawn pressed. (Needs `pressDown` / `release` from the core fork.)
+- **Real press-and-hold from the keyboard** – esc, ⌫, ↩ and space send button-down on key down and button-up on key up, exactly like the Siri Remote: hold esc → Home screen, hold ⌫ → Control Center, hold ↩ → context menu. macOS key repeat no longer fires a burst of clicks, and the held button is drawn pressed. (Uses the new `pressDown` / `release` in `ItsytvCore`.)
 - **Keys only go to the remote** – typing in other windows of the app never reaches the TV.
 - **Show artwork** toggle in the ⋯ menu (on by default) – hide the artwork square for a shorter panel.
 - **Bigger close button.**
@@ -20,14 +20,11 @@
 ### Build the fork
 
 ```bash
-git clone -b custom https://github.com/Lemelson/itsytv-core.git
-git clone -b custom https://github.com/Lemelson/itsytv-macos.git
+git clone https://github.com/Lemelson/itsytv-macos.git
 cd itsytv-macos
 xcodegen generate
 open itsytv.xcodeproj
 ```
-
-Both folders must sit side by side (`project.yml` points at `../itsytv-core`).
 
 ---
 
