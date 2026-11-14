@@ -14,6 +14,8 @@
 - **Show artwork** toggle in the ⋯ menu (on by default) – hide the artwork square for a shorter panel.
 - **Bigger close button.**
 - **No Itsyhome promo** in the status menu (fork only – not proposed upstream).
+- **Remote comes to the current desktop** – if it was left open on another Space or behind a full-screen app, clicking the menu bar icon or the device brings it here instead of doing nothing.
+- **Searchable name** – installed as "Apple TV Remote – Пульт ТВ (Itsytv)", so Spotlight and Launchpad find it by "remote", "apple tv", "пульт", "тв" or "itsytv".
 
 <img src="docs/fork/shortcuts-window.png" width="520" alt="Keyboard Shortcuts window" />
 
@@ -25,6 +27,8 @@ cd itsytv-macos
 xcodegen generate
 open itsytv.xcodeproj
 ```
+
+Build Release, replace the copy in /Applications and start it: `scripts/install-fork.sh` (set `DEVELOPMENT_TEAM` for your own signing team).
 
 ---
 
