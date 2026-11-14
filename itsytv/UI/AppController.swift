@@ -223,7 +223,7 @@ final class AppController: NSObject, NSMenuDelegate {
             } else {
                 rebuildMenu()
             }
-        case .pairing, .error:
+        case .pairing, .localNetworkDenied, .error:
             rebuildMenu()
         case .connected:
             menu.cancelTracking()
@@ -256,6 +256,23 @@ final class AppController: NSObject, NSMenuDelegate {
             let item = NSMenuItem(title: "Connecting...", action: nil, keyEquivalent: "")
             item.isEnabled = false
             menu.addItem(item)
+            // Pairing stays here until the Apple TV shows its PIN – this is the way out if it never does.
+            menu.addItem(createActionItem(title: "Cancel") { [weak self] in
+                self?.manager.disconnect()
+            })
+        case .localNetworkDenied:
+            for line in ["Local network access is off", "Turn on Itsytv under Local Network"] {
+                let item = NSMenuItem(title: line, action: nil, keyEquivalent: "")
+                item.isEnabled = false
+                menu.addItem(item)
+            }
+            menu.addItem(NSMenuItem.separator())
+            menu.addItem(createActionItem(title: "Open Privacy & Security...", symbolName: "hand.raised") {
+                SystemSettingsPane.privacySecurity.open()
+            })
+            menu.addItem(createActionItem(title: "Cancel") { [weak self] in
+                self?.manager.disconnect()
+            })
         case .pairing:
             // Reused across menu reopens so typed digits and the post-submit
             // spinner survive – tvOS 27 can take a while to confirm the PIN.
@@ -1011,6 +1028,8 @@ struct PanelContentView: View {
             switch manager.connectionStatus {
             case .connecting, .connected:
                 RemoteControlView()
+            case .localNetworkDenied:
+                LocalNetworkDeniedView()
             case .error(let message):
                 ErrorView(message: message)
             default:

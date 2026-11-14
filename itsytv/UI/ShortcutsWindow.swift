@@ -22,7 +22,7 @@ enum ShortcutsWindow {
             backing: .buffered,
             defer: false
         )
-        window.title = "Keyboard Shortcuts"
+        window.title = "Keyboard shortcuts"
         window.contentView = hostingView
         window.setContentSize(hostingView.fittingSize)
         window.isReleasedWhenClosed = false
@@ -362,10 +362,18 @@ private final class KeyCatcherView: NSView {
         guard window != nil else { return }
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, event.window === self.window else { return event }
-            // While a row is recording, any key (with or without modifiers) becomes its new shortcut.
+            // While a row is recording, a key (with or without modifiers) becomes its new shortcut.
             if ShortcutSettings.shared.recording != nil {
-                if !event.isARepeat { self.onRecord?(ShortcutKeys(event: event)) }
-                return nil
+                switch ShortcutRecording(ShortcutKeys(event: event)) {
+                case .cancel:
+                    ShortcutSettings.shared.recording = nil
+                    return nil
+                case .passThrough:
+                    return event
+                case .record(let keys):
+                    if !event.isARepeat { self.onRecord?(keys) }
+                    return nil
+                }
             }
             guard let shortcut = RemoteShortcut.match(event) else { return event }
             self.onShortcut?(shortcut)
